@@ -35,3 +35,10 @@ desktop.ini
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# routeforge runtime
+.routeforge/
+*.db
+*.db-shm
+*.db-wal
+.routeforge-test.db

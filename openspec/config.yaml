@@ -1,0 +1,42 @@
+﻿schema: spec-driven
+
+context: |
+  routeforge-core is a multi-account AI API gateway written in Python 3.12.
+  It accepts calls routed to skills (e.g. firecrawl/scrape, tavily/search) and
+  forwards them to the upstream provider, rotating between N configured
+  accounts per provider with round-robin + cooldown on 429/402/5xx.
+
+  Stack: Python 3.12, FastAPI (HTTP), httpx (async upstream), SQLite
+  (accounts + usage log), cryptography.fernet (encrypted secrets at rest),
+  Typer (CLI), official `mcp` Python SDK (Model Context Protocol server).
+
+  Process: OpenSpec spec-driven workflow. Every change originates as an
+  OpenSpec change under openspec/changes/<name>/, applied via /opsx-apply,
+  and merged to main via PR. CHANGELOG.md is updated on every archive.
+
+  Out of scope for v1: token-bucket credit tracking, OAuth flows, multi-tenant
+  virtual keys, web UI, streaming responses, HTTP/SSE MCP transport.
+
+rules:
+  proposal:
+    - Keep proposals under 1 page; expand design.md instead.
+    - Always include a "Non-goals" callout in the Impact section when
+      scope creep is a risk.
+  tasks:
+    - Break tasks into chunks of max 2 hours.
+    - Every task that creates or modifies a file MUST name the file path
+      (relative to repo root) so Assert-OpenspecChange.ps1 can grep it.
+  design:
+    - Diagrams must use mermaid syntax.
+    - Always reference the affected spec(s) by their capability path.
+
+operations:
+  apply:
+    guidance:
+      - Run pytest after each task that touches src/routeforge/.
+      - Run `openspec validate bootstrap-core` before archive.
+  archive:
+    guidance:
+      - Before archiving, run `openspec validate` and the Python test suite;
+        both must exit 0.
+      - Summarize the archive outcome in CHANGELOG.md.

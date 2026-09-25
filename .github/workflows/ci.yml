@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -6,24 +6,36 @@ on:
   pull_request:
 
 jobs:
-  lint-test:
+  validate:
+    name: Lint, test, and validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # TODO: uncomment the setup action matching your stack
-      # - uses: actions/setup-node@v4
-      #   with:
-      #     node-version: 22
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: "3.13"
-      # - uses: actions/setup-go@v5
-      #   with:
-      #     go-version: stable
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
 
-      - name: Lint
-        run: echo "TODO: replace with your lint command"
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
-      - name: Test
-        run: echo "TODO: replace with your test command"
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Pytest
+        run: pytest -q
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install OpenSpec
+        run: npm install -g @fission-ai/openspec@latest
+
+      - name: OpenSpec validate
+        run: openspec validate bootstrap-core
