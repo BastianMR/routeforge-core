@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: uncomment the setup action matching your stack
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 22
+      # - uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.13"
+      # - uses: actions/setup-go@v5
+      #   with:
+      #     go-version: stable
+
+      - name: Lint
+        run: echo "TODO: replace with your lint command"
+
+      - name: Test
+        run: echo "TODO: replace with your test command"
