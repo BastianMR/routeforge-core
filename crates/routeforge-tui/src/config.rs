@@ -28,11 +28,6 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn with_base_url(mut self, base_url: &str) -> Self {
-        self.base_url = normalize(base_url);
-        self
-    }
-
     pub fn endpoint(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
@@ -62,7 +57,10 @@ mod tests {
 
     #[test]
     fn endpoint_joins_without_double_slash() {
-        let config = Config::default().with_base_url("http://127.0.0.1:8787/");
+        let config = Config {
+            base_url: normalize("http://127.0.0.1:8787/"),
+            ..Config::default()
+        };
         assert_eq!(
             config.endpoint("/v1/accounts"),
             "http://127.0.0.1:8787/v1/accounts"

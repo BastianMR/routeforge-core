@@ -75,7 +75,6 @@ pub enum Action {
     Reload,
     ToggleAccount,
     DisableAccount,
-    ToggleHelp,
     Quit,
 }
 

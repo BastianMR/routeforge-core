@@ -89,10 +89,6 @@ impl Client {
         Ok(Self { http, config })
     }
 
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
     pub async fn accounts(&self) -> Result<Vec<Account>> {
         let body: serde_json::Value = self.get("/v1/accounts").await?;
         // The endpoint groups by provider; flatten into one list.

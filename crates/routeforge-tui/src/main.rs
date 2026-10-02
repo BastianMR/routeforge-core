@@ -87,7 +87,7 @@ async fn run(
                         None => app.status = Some("no account selected".into()),
                     }
                 }
-                Action::ToggleHelp | Action::None => {}
+                Action::None => {}
             }
         }
 
