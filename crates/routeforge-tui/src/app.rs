@@ -700,19 +700,19 @@ mod tests {
         app.accounts = vec![
             Account {
                 id: 1,
-                provider: "firecrawl",
+                provider: "firecrawl".into(),
                 tags: vec!["scrape".into()],
                 ..Default::default()
             },
             Account {
                 id: 2,
-                provider: "tavily",
+                provider: "tavily".into(),
                 tags: vec!["scrape".into()],
                 ..Default::default()
             },
             Account {
                 id: 3,
-                provider: "exa",
+                provider: "exa".into(),
                 tags: vec!["search".into()],
                 ..Default::default()
             },
@@ -740,15 +740,15 @@ mod tests {
         app.accounts = vec![
             Account {
                 id: 1,
-                provider: "firecrawl",
-                label: "fc1",
+                provider: "firecrawl".into(),
+                label: "fc1".into(),
                 tags: vec!["scrape".into()],
                 ..Default::default()
             },
             Account {
                 id: 2,
-                provider: "tavily",
-                label: "tv1",
+                provider: "tavily".into(),
+                label: "tv1".into(),
                 tags: vec![],
                 ..Default::default()
             },

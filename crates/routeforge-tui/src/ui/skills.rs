@@ -19,7 +19,11 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     skill.provider_group.clone().unwrap_or_else(|| "-".into()),
                     Style::default().fg(Color::Magenta),
                 ),
-                ratatui::text::Span::raw(if skill.requires_account { "yes" } else { "no" }.into()),
+                ratatui::text::Span::raw(String::from(if skill.requires_account {
+                    "yes"
+                } else {
+                    "no"
+                })),
                 ratatui::text::Span::raw(app.account_count_for(skill).to_string()),
                 ratatui::text::Span::raw(skill.description.clone()),
             ])

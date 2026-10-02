@@ -96,7 +96,7 @@ impl Client {
     pub async fn accounts(&self) -> Result<Vec<Account>> {
         let body: serde_json::Value = self.get("/v1/accounts").await?;
         // The endpoint groups by provider; flatten into one list.
-        let mut out = Vec::new();
+        let mut out: Vec<Account> = Vec::new();
         if let Some(map) = body.as_object() {
             for accounts in map.values() {
                 if let Some(items) = accounts.as_array() {

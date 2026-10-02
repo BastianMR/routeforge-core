@@ -54,10 +54,13 @@ pub async fn run(
             Ok(message) => message,
             Err(_) => break,
         };
-        let kind = message
-            .event
-            .clone()
-            .unwrap_or_else(|| "message".to_string());
+        // eventsource-stream exposes `event` as a plain String, defaulting to
+        // "message" when the frame carries no `event:` field.
+        let kind = if message.event.trim().is_empty() {
+            "message".to_string()
+        } else {
+            message.event.clone()
+        };
         let Some(event) = parse_frame(last_event_id + 1, &kind, &message.data) else {
             continue; // keepalive comment
         };
