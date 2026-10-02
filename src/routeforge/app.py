@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import ipaddress
-from typing import Annotated, Any
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .models import SkillCallRequest
-from .router import Router
+from .runtime import Runtime
+from .usage import parse_since
+
+# `error_code` -> (HTTP status, response body). The spec pins the code strings.
+_ERROR_STATUS = {
+    "no_accounts_for_group": 400,
+    "account_not_found": 400,
+    "all_accounts_cooling": 503,
+}
 
 
 def _validate_bind(settings) -> None:
@@ -26,37 +38,39 @@ def _validate_bind(settings) -> None:
         )
 
 
-def create_app(router: Router) -> FastAPI:
-    app = FastAPI(title="routeforge-core", version="0.1.0")
+def create_app(runtime: Runtime) -> FastAPI:
+    router = runtime.router
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        tasks = [
+            asyncio.create_task(runtime.usage_rollup_loop()),
+            asyncio.create_task(runtime.usage_tick_loop()),
+        ]
+        app.state.tasks = tasks
+        try:
+            yield
+        finally:
+            for task in tasks:
+                task.cancel()
+            for task in tasks:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            await runtime.http.aclose()
+
+    app = FastAPI(title="routeforge-core", version="0.2.0", lifespan=lifespan)
 
     @app.get("/v1/skills")
     async def list_skills(_: Request) -> list[dict[str, Any]]:
-        out = []
-        for skill in router._registry.list():
-            schema = skill.schema()
-            out.append(
-                {
-                    "name": skill.name,
-                    "provider": skill.provider,
-                    "description": skill.description,
-                    "schema": {"inputs": schema.inputs, "outputs": schema.outputs},
-                }
-            )
-        return out
+        return [info.model_dump() for info in runtime.registry.list_all()]
 
     @app.post("/skills/{name}/call")
-    async def call_skill(name: str, body: SkillCallRequest) -> dict[str, Any]:
+    async def call_skill(name: str, body: SkillCallRequest) -> Any:
         response = await router.call_skill(name, body.args)
-        if response.error and response.result is None:
-            if response.error.startswith("skill not found"):
-                raise HTTPException(status_code=404, detail=response.error)
-            if response.error.startswith("all accounts for provider"):
-                raise HTTPException(status_code=503, detail=response.error)
-            raise HTTPException(status_code=502, detail=response.error)
-        return response.model_dump(exclude_none=True)
+        return _dispatch_result(response)
 
     @app.post("/v1/chat/completions")
-    async def chat_completions(body: dict[str, Any]) -> dict[str, Any]:
+    async def chat_completions(body: dict[str, Any]) -> Any:
         model = body.get("model", "")
         if not isinstance(model, str) or not model.startswith("skill:"):
             raise HTTPException(
@@ -75,12 +89,9 @@ def create_app(router: Router) -> FastAPI:
         args = {"message": content} if isinstance(content, str) else {"content": content}
         response = await router.call_skill(skill_name, args)
         if response.error:
-            status = 502
-            if response.error.startswith("skill not found"):
-                status = 404
-            elif response.error.startswith("all accounts for provider"):
-                status = 503
-            raise HTTPException(status_code=status, detail=response.error)
+            raise HTTPException(
+                status_code=_status_for(response), detail=response.error
+            )
         return {
             "id": "routeforge-core",
             "object": "chat.completion",
@@ -102,11 +113,166 @@ def create_app(router: Router) -> FastAPI:
             return {provider or "all": [a.model_dump() for a in result]}
         return {p: [a.model_dump() for a in infos] for p, infos in result.items()}
 
+    @app.get("/v1/accounts/pool")
+    async def pool_snapshot() -> dict[str, Any]:
+        """Per-account pool state, consumed by the TUI Accounts tab."""
+        return runtime.pool.snapshot()
+
     @app.get("/v1/usage")
-    async def usage(provider: str | None = None) -> dict[str, Any]:
+    async def usage(
+        provider: str | None = None,
+        skill: str | None = None,
+        since: str | None = None,
+        group_by: str | None = None,
+        limit: int = 1000,
+    ) -> Any:
+        if group_by is not None or skill is not None:
+            if provider is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="provider cannot be combined with skill or group_by",
+                )
+            window = parse_since(since)
+            if group_by is None:
+                return runtime.usage.rows(skill=skill, since=window, limit=limit)
+            if group_by not in ("account", "skill"):
+                raise HTTPException(
+                    status_code=400, detail="group_by must be 'account' or 'skill'"
+                )
+            return runtime.usage.aggregate(since=window, group_by=group_by)[:limit]
         return router.usage_summary(provider).model_dump()
+
+    @app.post("/v1/skills/manage/reload")
+    async def reload_skills() -> dict[str, Any]:
+        return runtime.registry.reload()
+
+    @app.get("/v1/skills/manage")
+    async def managed_skills(source: str | None = None) -> list[dict[str, Any]]:
+        if source not in (None, "all", "builtin", "plugin", "manifest"):
+            raise HTTPException(
+                status_code=400,
+                detail="source must be 'builtin', 'plugin', 'manifest', or 'all'",
+            )
+        return [info.model_dump() for info in runtime.registry.by_source(source)]
+
+    @app.get("/v1/plugins")
+    async def list_plugins() -> list[dict[str, Any]]:
+        return [p.model_dump() for p in runtime.plugin_repo.list()]
+
+    @app.post("/v1/accounts/manage/toggle")
+    async def toggle_account(body: dict[str, Any]) -> dict[str, Any]:
+        account_id = _account_id(body)
+        try:
+            enabled = runtime.repo.toggle_enabled(account_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if not enabled:
+            await runtime.pool.announce_disabled(account_id, body.get("provider", ""))
+        return {"account_id": account_id, "enabled": enabled}
+
+    @app.post("/v1/accounts/manage/disable")
+    async def disable_account(body: dict[str, Any]) -> dict[str, Any]:
+        account_id = _account_id(body)
+        try:
+            enabled = runtime.repo.set_enabled(account_id, False)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        await runtime.pool.announce_disabled(account_id, body.get("provider", ""))
+        return {"account_id": account_id, "enabled": enabled}
+
+    @app.post("/v1/accounts/manage/tags")
+    async def update_account_tags(body: dict[str, Any]) -> dict[str, Any]:
+        account_id = _account_id(body)
+        tags = list(runtime.repo.add_tags(account_id, body.get("add")))
+        if body.get("remove"):
+            tags = runtime.repo.remove_tags(account_id, body["remove"])
+        return {"account_id": account_id, "tags": tags}
+
+    @app.get("/v1/events")
+    async def events(request: Request) -> StreamingResponse:
+        # The bind address decides exposure; `_validate_bind` already refuses a
+        # non-loopback bind at startup, so this is the second line of defense
+        # for embedded deployments.
+        settings = runtime.settings
+        if not settings.allow_public and not _is_loopback(settings.http_host):
+            raise HTTPException(status_code=403, detail="loopback only")
+
+        return StreamingResponse(
+            _stream(runtime, _last_event_id(request)),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return app
 
 
-_ = Annotated  # silence unused
+def _status_for(response) -> int:
+    if response.error_code in _ERROR_STATUS:
+        return _ERROR_STATUS[response.error_code]
+    if response.error and response.error.startswith("skill not found"):
+        return 404
+    return 502
+
+
+def _dispatch_result(response) -> Any:
+    if response.error and response.result is None:
+        if response.error_code:
+            body = {"error": response.error_code, "detail": response.error}
+            headers = (
+                {"Retry-After": "60"}
+                if response.error_code == "all_accounts_cooling"
+                else None
+            )
+            return JSONResponse(
+                status_code=_ERROR_STATUS.get(response.error_code, 502),
+                content=body,
+                headers=headers,
+            )
+        if response.error.startswith("skill not found"):
+            raise HTTPException(status_code=404, detail=response.error)
+        if response.error.startswith("all accounts for provider"):
+            raise HTTPException(status_code=503, detail=response.error)
+        raise HTTPException(status_code=502, detail=response.error)
+    return response.model_dump(exclude_none=True)
+
+
+async def _stream(runtime: Runtime, last_event_id: int) -> AsyncIterator[str]:
+    subscription = runtime.events.subscribe()
+    heartbeat = runtime.settings.sse_heartbeat_seconds
+    try:
+        for event in subscription.replay_after(last_event_id):
+            yield event.to_sse()
+        while True:
+            try:
+                event = await asyncio.wait_for(subscription.get(), timeout=heartbeat)
+            except TimeoutError:
+                yield ": keepalive\n\n"
+                continue
+            yield event.to_sse()
+    except asyncio.CancelledError:  # client disconnected
+        raise
+    finally:
+        subscription.close()
+
+
+def _account_id(body: dict[str, Any]) -> int:
+    raw = body.get("account_id")
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="account_id must be an integer") from exc
+
+
+def _last_event_id(request: Request) -> int:
+    raw = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
+    try:
+        return int(raw) if raw else 0
+    except ValueError:
+        return 0
+
+
+def _is_loopback(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host in ("localhost", "")

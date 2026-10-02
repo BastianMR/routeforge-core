@@ -37,5 +37,44 @@ jobs:
       - name: Install OpenSpec
         run: npm install -g @fission-ai/openspec@latest
 
-      - name: OpenSpec validate
-        run: openspec validate bootstrap-core
+      # Validates every main spec plus every active change, so this step
+      # survives archiving and never needs the change name hardcoded.
+      - name: OpenSpec validate (all specs + active changes)
+        run: openspec validate --all --strict
+
+      - name: OpenSpec archived tasks complete
+        run: openspec validate --archived --strict
+
+  tui:
+    name: Lint, test, and format the TUI crate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/routeforge-tui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # The workspace target dir lives at the repo root, not in the crate.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ../../target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('../../Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Cargo fmt
+        run: cargo fmt --check
+
+      - name: Cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo test
+        run: cargo test

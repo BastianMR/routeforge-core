@@ -70,5 +70,5 @@
 
 ## 10. Archive
 
-- [ ] 10.1 `openspec archive bootstrap-core --yes` moves the change to `openspec/changes/archive/2026-09-25-bootstrap-core/`.
-- [ ] 10.2 `openspec validate --all` exits 0.
+- [x] 10.1 `openspec archive bootstrap-core --yes` moves the change to `openspec/changes/archive/2026-09-25-bootstrap-core/`.
+- [x] 10.2 `openspec validate --all` exits 0.
