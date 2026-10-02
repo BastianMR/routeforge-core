@@ -17,7 +17,10 @@ dependencies = [
   "typer>=0.12",
   "pydantic>=2.7",
   "cryptography>=43",
-  "mcp>=1.0",
+  # The server is written against the 1.x SDK: `mcp.server.fastmcp.FastMCP`.
+  # 2.x renamed it to `mcp.server.mcpserver.MCPServer`, so cap the range until
+  # the port is done rather than letting a fresh install break collection.
+  "mcp>=1.0,<2",
 ]
 
 [project.optional-dependencies]

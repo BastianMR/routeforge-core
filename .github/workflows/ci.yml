@@ -59,15 +59,17 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      # The workspace target dir lives at the repo root, not in the crate.
+      # The workspace target dir lives at the repo root, not in the crate, so the
+      # cache paths must be anchored to GITHUB_WORKSPACE. There is no committed
+      # Cargo.lock yet, so hash the manifests instead.
       - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ../../target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('../../Cargo.lock') }}
+            ${{ github.workspace }}/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Cargo fmt
