@@ -109,8 +109,8 @@ Numbered checklist. Each item is verifiable.
 - [x] 12.6 `src/api/events.rs` — SSE consumer using `eventsource-stream`
 - [x] 12.7 `src/ui/mod.rs` and per-tab widgets: `accounts.rs`, `skills.rs`, `usage.rs`, `logs.rs`, `help.rs`
 - [x] 12.8 `src/config.rs` — read `ROUTE_FORGE_URL` env (default `http://127.0.0.1:8787`)
-- [ ] 12.9 `cargo build --release` produces `target/release/routeforge-tui.exe`
-- [ ] 12.10 `cargo test` passes for any unit tests (pure logic, no UI rendering)
+- [x] 12.9 `cargo build --release` produces `target/release/routeforge-tui.exe`
+- [x] 12.10 `cargo test` passes for any unit tests (pure logic, no UI rendering)
 
 ## 13. Documentation
 
@@ -129,9 +129,9 @@ Numbered checklist. Each item is verifiable.
 ## 15. Verification before archive
 
 - [x] 15.1 `pytest -q` → all tests pass (Python)
-- [ ] 15.2 `cargo test` → all tests pass (Rust)
+- [x] 15.2 `cargo test` → all tests pass (Rust)
 - [x] 15.3 `ruff check src tests` → no issues
-- [ ] 15.4 `cargo clippy -- -D warnings` → no issues
+- [x] 15.4 `cargo clippy -- -D warnings` → no issues
 - [x] 15.5 `openspec validate mcp-skill-hub-and-tui` → valid
 - [x] 15.6 Manual smoke: start `routeforge serve`, open `routeforge tui`, verify live SSE updates on cooldown/recovery
 - [x] 15.7 Manual smoke: install a sample plugin, run `routeforge skills reload`, confirm `notifications/tools/list_changed` from a connected MCP client

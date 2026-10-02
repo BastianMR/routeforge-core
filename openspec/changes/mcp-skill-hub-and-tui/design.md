@@ -283,28 +283,33 @@ keeps working.
 
 ## TUI (Rust + ratatui)
 
-### Static-review findings
+### How the crate was verified
 
-The TUI could not be compiled on the machine that wrote it: `rustc.exe`,
-`cargo-fmt.exe`, and `clippy-driver.exe` are blocked by a machine-level App
-Control policy (`os error 4551`). A static review against the ratatui 0.29 /
-reqwest 0.12 / eventsource-stream 0.2 APIs found and fixed:
+`rustc.exe`, `cargo-fmt.exe`, and `clippy-driver.exe` are blocked on the
+authoring machine by an App Control policy (`os error 4551`), so the crate was
+never compiled locally. CI became the compiler. It found, in order:
 
-- `Connection` derived `Copy` while carrying `Disconnected(String)`.
-- `PoolAccount` derived `Eq` while carrying an `f64`.
-- `Row::new(vec![...])` mixed `Span` and `Line`; ratatui unifies cells through
-  `Cell::from`, and a bare `vec!` forces every element to one type.
-- `r`, `space`, and `d` returned actions that `main.rs` discarded, so the three
-  mutating keys did nothing. They now issue the documented `POST` calls against
-  the selected (filter-aware) account and report the outcome in the footer.
-- `ui::help::draw` was never called, which `cargo clippy -D warnings` treats as
-  dead code. It is now an overlay on `?`.
-- `poll_key` was `async` but called the blocking `crossterm::event::poll` for a
-  full tick on a tokio worker, delaying SSE events; it now uses
-  `spawn_blocking`.
-- `api::events::run` returned `()`, so reconnects always resumed from event 0
-  and replayed the whole ring buffer. It now returns the last id forwarded and
-  `spawn_event_loop` resumes from it.
+- `cargo fmt --check` passed immediately, confirming the `rustfmt` run done
+  locally through `rustfmt.exe` directly.
+- Round 1: four compile errors — `message.event` is a `String` in
+  eventsource-stream 0.2 rather than an `Option<String>`; an unannotated
+  `Vec::new()`; an ambiguous `.into()`; and `&str` assigned to `String` fields
+  in test literals.
+- Round 2: five clippy lints under `-D warnings` — `manual_clamp`,
+  `single_match`, `field_reassign_with_default`, `unnecessary_sort_by`, and
+  three `needless_question_mark`.
+- Round 3: three `dead_code` items — an unused `Client::config()`, an
+  unconstructed `Action::ToggleHelp`, and a `Config::with_base_url` that only
+  its own test called.
+
+A static review before CI had already caught three compile errors of its own
+(`Copy` on `Connection`, `Eq` on `PoolAccount`, a mixed `Span`/`Line` `vec!`)
+and four behavior bugs (`r`, `space`, and `d` were no-ops; SSE reconnects
+replayed the whole ring buffer). It could not see the type-inference and
+signature mismatches above, which only a compiler finds.
+
+Net: roughly 15 compiler and linter findings across three rounds. Budget for
+CI to be the first build of new code written on a locked-down machine.
 
 ### Crate
 

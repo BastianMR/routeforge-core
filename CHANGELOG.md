@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `mcp` was declared as `>=1.0` with no upper bound while the server targets the
+  1.x SDK. A fresh install resolved `mcp` 2.x, where `FastMCP` was renamed to
+  `MCPServer`, and every `routeforge mcp` invocation plus the test suite failed
+  to import. Pinned to `mcp>=1.0,<2` until the port is done.
+- CI validated `openspec validate bootstrap-core`, a change that had already
+  been archived, so the step always failed. It now runs
+  `openspec validate --all --strict` plus `--archived --strict` and never
+  hardcodes a change name.
+- The TUI's `notifications/tools/list_changed` was emitted on the event bus but
+  never reached MCP clients: `send_tool_list_changed` lives on `ServerSession`
+  and is only reachable through the request ContextVar. `reload_skills` is now
+  async and notifies from inside the tool call.
+- In the TUI, `r`, `space`, and `d` returned actions the main loop discarded,
+  so none of the mutating keys did anything, and SSE reconnects resumed from
+  event 0 and replayed the whole ring buffer.
+- AGENTS.md cited a `process` capability and a `routing-schema` spec that do
+  not exist.
+
 ### Added
 
 - **Plugin skills** (`skills-discovery`). Skills load from `.toml` manifests
