@@ -106,22 +106,21 @@ impl Client {
                 }
             }
         }
-        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out.sort_by_key(|a| a.id);
         Ok(out)
     }
 
     pub async fn skills(&self) -> Result<Vec<Skill>> {
-        Ok(self.get("/v1/skills").await?)
+        self.get("/v1/skills").await
     }
 
     pub async fn usage(&self, group_by: &str, since: &str) -> Result<Vec<UsageRow>> {
-        Ok(self
-            .get(&format!("/v1/usage?group_by={group_by}&since={since}"))
-            .await?)
+        self.get(&format!("/v1/usage?group_by={group_by}&since={since}"))
+            .await
     }
 
     pub async fn pool(&self) -> Result<PoolSnapshot> {
-        Ok(self.get("/v1/accounts/pool").await?)
+        self.get("/v1/accounts/pool").await
     }
 
     pub async fn reload_skills(&self) -> Result<ReloadDiff> {

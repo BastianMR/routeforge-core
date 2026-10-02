@@ -422,9 +422,8 @@ pub fn spawn_event_loop(config: Config, tx: mpsc::Sender<BusEvent>) -> tokio::ta
         loop {
             // `run` returns on a clean close or on error. Either way the core may
             // be restarting, so resume from the last id actually forwarded.
-            match crate::api::events::run(config.clone(), tx.clone(), last_id).await {
-                Ok(seen) => last_id = seen,
-                Err(_) => {}
+            if let Ok(seen) = crate::api::events::run(config.clone(), tx.clone(), last_id).await {
+                last_id = seen;
             }
             if tx.is_closed() {
                 return;
@@ -680,8 +679,10 @@ mod tests {
 
     #[test]
     fn logs_are_capped_and_newest_first() {
-        let mut config = Config::default();
-        config.max_logs = 3;
+        let config = Config {
+            max_logs: 3,
+            ..Config::default()
+        };
         let mut app = App::new(config);
         for id in 1..=5 {
             app.apply_event(&BusEvent {

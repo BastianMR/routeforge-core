@@ -37,8 +37,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
 /// Centered key-binding overlay covering the middle of `area`.
 fn help_area(area: Rect) -> Rect {
-    let width = area.width.saturating_sub(8).min(46).max(20);
-    let height = area.height.saturating_sub(6).min(12).max(6);
+    let width = area.width.saturating_sub(8).clamp(20, 46);
+    let height = area.height.saturating_sub(6).clamp(6, 12);
     Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,
